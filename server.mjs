@@ -819,6 +819,7 @@ wss.on("connection", (ws) => {
   });
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+const HOST = process.env.HOST || "0.0.0.0";
+server.listen(PORT, HOST, () => {
   console.log(`GeminiWatermark local clone running at http://127.0.0.1:${PORT}`);
 });
