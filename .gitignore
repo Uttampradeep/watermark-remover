@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Local database & temp files
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.sqlite
+
+# Local credentials
+.env.local
+.env*.local
+
+# Ephemeral test scripts & verification screenshots
+test-*.mjs
+check-*.mjs
+inspect-*.mjs
+verify-*.mjs
+analyze-*.mjs
+patch-*.mjs
+apply-*.mjs
+capture-*.mjs
+find-*.mjs
+*.png
+*.jpg
+*.mp4
+*.log
+
+# System files
+.DS_Store
+Thumbs.db

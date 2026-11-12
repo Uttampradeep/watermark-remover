@@ -1,0 +1,1 @@
+import{s as e}from"./index-CMACy7-O.js";var t=e;export{t as component};

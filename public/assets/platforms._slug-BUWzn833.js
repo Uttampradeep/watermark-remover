@@ -1,0 +1,1 @@
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{t}from"./jsx-runtime-DREnUpxT.js";import{o as n,t as r}from"./index-CMACy7-O.js";var i=e(t());function a(){return(0,i.jsx)(n,{guide:r.useLoaderData()})}export{a as component};

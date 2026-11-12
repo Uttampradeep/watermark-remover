@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: watermark-remover
+    env: docker
+    plan: standard
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 3456
+      - key: APP_NAME
+        value: Watermark Remover
+      - key: NODE_ENV
+        value: production

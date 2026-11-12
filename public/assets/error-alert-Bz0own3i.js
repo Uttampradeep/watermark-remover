@@ -1,0 +1,1 @@
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{t}from"./jsx-runtime-DREnUpxT.js";import{Nt as n,Zn as r,jt as i}from"./index-CMACy7-O.js";var a=e(t(),1);function o({icon:e=!1,className:t,children:o}){return(0,a.jsxs)(i,{variant:`danger`,className:t,children:[e&&(0,a.jsx)(r,{"aria-hidden":`true`}),(0,a.jsx)(n,{children:o})]})}export{o as t};

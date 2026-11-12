@@ -1,0 +1,410 @@
+/* Watermark Remover — Unique Midnight Slate & Emerald-Cyan Studio Theme */
+
+:root,
+:host,
+html,
+body {
+  --white: #0a0f1a;
+  --gray-50: #0f1626;
+  --gray-100: #141d31;
+  --gray-200: #1c2742;
+  --gray-300: #283659;
+  --gray-400: #64748b;
+  --gray-500: #94a3b8;
+  --gray-550: #94a3b8;
+  --gray-600: #cbd5e1;
+  --gray-700: #e2e8f0;
+  --gray-800: #f1f5f9;
+  --gray-900: #f8fafc;
+
+  /* Unique Emerald-Teal + Cyan studio palette (replaces old violet/purple) */
+  --violet-50: rgba(16, 185, 129, 0.12);
+  --violet-100: rgba(16, 185, 129, 0.2);
+  --violet-200: rgba(16, 185, 129, 0.35);
+  --violet-500: #10b981;
+  --violet-600: #06b6d4;
+  --violet-700: #34d399;
+  --primary: #10b981;
+  --primary-foreground: #042f2e;
+  --border: rgba(255, 255, 255, 0.1);
+
+  --color-canvas: #0a0f1a;
+  --color-subtle: #101728;
+  --color-fg: #f8fafc;
+  --color-fg-muted: #94a3b8;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-control: rgba(148, 163, 184, 0.28);
+  --color-brand: #10b981;
+  --color-brand-hover: #06b6d4;
+  --radius-md: 16px;
+}
+
+html,
+body {
+  background-color: #0a0f1a !important;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.08) 1px, transparent 0),
+    radial-gradient(ellipse 75% 45% at 50% -10%, rgba(16, 185, 129, 0.2), transparent 65%),
+    radial-gradient(ellipse 55% 40% at 85% 15%, rgba(6, 182, 212, 0.14), transparent 60%) !important;
+  background-size: 28px 28px, 100% 100%, 100% 100% !important;
+  background-attachment: fixed !important;
+  color: #f8fafc !important;
+  color-scheme: dark;
+}
+
+/* Remove fake reviews row & unwanted third-party Autopilot/Sceneform promo section */
+div:has(> div > img[src*="avatar-1.png"]),
+section:has(.autopilot-tabs) {
+  display: none !important;
+}
+
+/* Crisp studio hero headline */
+.hero-ink {
+  color: #f8fafc !important;
+  background: linear-gradient(135deg, #ffffff 0%, #d1fae5 55%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-ink svg,
+.hero-ink .text-brand {
+  -webkit-text-fill-color: #10b981 !important;
+  color: #10b981 !important;
+}
+
+/* Pill-style glassmorphic header */
+header {
+  background: rgba(10, 15, 26, 0.82) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 9999px !important;
+  box-shadow: 0 14px 36px -14px rgba(0, 0, 0, 0.75) !important;
+}
+
+/* Semantic surfaces */
+.bg-canvas,
+.bg-subtle,
+.bg-selected,
+section,
+footer,
+[class*="bg-white"],
+[class*="bg-gray-50"],
+[class*="bg-neutral-50"],
+[class*="bg-slate-50"] {
+  background-color: transparent !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f1f5f9 !important;
+}
+
+footer {
+  background-color: rgba(15, 22, 38, 0.85) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Fix "What it does" & "What it doesn't do" cards so text is 100% readable */
+.bg-success-subtle {
+  background: rgba(16, 185, 129, 0.11) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 16px 40px -20px rgba(16, 185, 129, 0.35) !important;
+}
+
+.text-success-text,
+.text-success {
+  color: #34d399 !important;
+}
+
+.bg-danger-subtle,
+.bg-warning-subtle,
+[class*="bg-amber-50"],
+[class*="bg-orange-50"],
+[class*="bg-rose-50"],
+[class*="bg-red-50"] {
+  background: rgba(244, 63, 94, 0.1) !important;
+  border: 1px solid rgba(244, 63, 94, 0.35) !important;
+  box-shadow: 0 16px 40px -20px rgba(244, 63, 94, 0.3) !important;
+}
+
+.text-danger-text,
+.text-warning-text,
+[class*="text-amber-"],
+[class*="text-orange-"] {
+  color: #fda4af !important;
+}
+
+/* Generic card surfaces */
+.rounded-2xl,
+.rounded-3xl,
+.rounded-xl {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Crisp readable text overrides */
+.text-fg,
+[class*="text-gray-900"],
+[class*="text-neutral-900"],
+[class*="text-slate-900"],
+[class*="text-black"] {
+  color: #f8fafc !important;
+}
+
+[class*="text-gray-700"],
+[class*="text-gray-800"],
+[class*="text-neutral-700"],
+[class*="text-slate-700"] {
+  color: #e2e8f0 !important;
+}
+
+.text-fg-muted,
+[class*="text-gray-500"],
+[class*="text-gray-600"],
+[class*="text-neutral-500"],
+[class*="text-neutral-600"],
+[class*="text-slate-500"] {
+  color: #94a3b8 !important;
+}
+
+.text-brand {
+  color: #10b981 !important;
+}
+
+/* Primary CTA Emerald-Cyan gradient */
+button[class*="bg-brand"],
+button[class*="bg-violet"],
+button[class*="bg-indigo"],
+button[class*="bg-primary"],
+a[class*="bg-brand"],
+a[class*="bg-black"],
+.bg-brand {
+  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%) !important;
+  color: #031512 !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 8px 24px -6px rgba(16, 185, 129, 0.45) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+}
+
+button[class*="bg-brand"]:hover,
+button[class*="bg-violet"]:hover,
+button[class*="bg-indigo"]:hover,
+button[class*="bg-primary"]:hover,
+a[class*="bg-brand"]:hover,
+a[class*="bg-black"]:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 12px 28px -6px rgba(6, 182, 212, 0.5) !important;
+}
+
+/* Interactive studio dropzone */
+[class*="border-dashed"] {
+  background: linear-gradient(180deg, rgba(16, 23, 40, 0.9), rgba(10, 15, 26, 0.96)) !important;
+  border: 1.5px dashed rgba(16, 185, 129, 0.5) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 24px 60px -24px rgba(16, 185, 129, 0.28) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+[class*="border-dashed"]:hover {
+  border-color: #22d3ee !important;
+  box-shadow: 0 28px 70px -20px rgba(6, 182, 212, 0.35) !important;
+}
+
+/* Inputs & selects */
+input,
+select,
+textarea {
+  background-color: rgba(15, 22, 38, 0.95) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0f1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #10b981;
+}
+
+/* Purge all third-party Sceneform / Autopilot promos and white gap bands */
+.autopilot-band,
+div:has(> .autopilot-band),
+.autopilot-strip,
+div:has(> .autopilot-strip),
+[data-strip],
+section:has(.autopilot-tabs),
+div:has(.autopilot-tabs) {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ========================================================
+   MODAL & DIALOG OPACITY & ALIGNMENT FIX (ZERO TEXT BLEED)
+   ======================================================== */
+
+/* Prevent dialog surfaces from inheriting transparent bg-canvas */
+[role="dialog"],
+div[role="dialog"],
+div[class*="group/dialog"],
+div[class*="dialog-content"],
+.dialog-content {
+  background-color: #0b1120 !important;
+  background: #0b1120 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(16, 185, 129, 0.25) !important;
+  border-radius: 18px !important;
+  color: #f8fafc !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  z-index: 10000 !important;
+}
+
+/* Modal backdrop overlay */
+div[data-state][class*="fixed inset-0"],
+div[class*="bg-overlay"] {
+  background-color: rgba(2, 6, 23, 0.88) !important;
+  backdrop-filter: blur(12px) !important;
+  z-index: 9999 !important;
+}
+
+/* Signup Panel inside dialog: Modern Dark Emerald/Cyan Studio, NOT glaring purple */
+.signup-panel,
+div[class*="signup-panel"] {
+  background: linear-gradient(145deg, #131c31 0%, #0d1527 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  border-radius: 14px !important;
+  color: #f1f5f9 !important;
+}
+
+.signup-headline {
+  color: #10b981 !important;
+  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* Hide broken avatar and brand logo containers unconditionally */
+div:has(> img[src*="avatars/0"]),
+div:has(> img[src*="star.svg"]),
+ul:has(> li > img[src*="popups/signup"]),
+img[src*="cdn.geminiwatermark.io"] {
+  display: none !important;
+}
+
+/* Invert all preview phone containers to dark glassmorphic studio */
+/* Invert preview phone containers (excluding opacity fractions like bg-inverse/10) */
+.bg-inverse:not([class*="/"]),
+div.bg-inverse:not([class*="/"]) {
+  background-color: #0d1527 !important;
+  background: #0d1527 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+
+/* ========================================================
+   UPFRONT CLERK AUTH & SHOWCASE DARK STYLING
+   ======================================================== */
+.auth-showcase,
+aside.auth-showcase {
+  background-color: #0b1120 !important;
+  background: linear-gradient(160deg, #10192e 0%, #070c18 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7) !important;
+}
+
+.auth-phone,
+div.auth-phone {
+  background-color: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+.auth-form {
+  color: #f8fafc !important;
+}
+
+.cl-card,
+.cl-signIn-root,
+.cl-signUp-root {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ========================================================
+   VEO PHONE COMPARISON SLIDER FIX
+   ======================================================== */
+.video-screen {
+  background-image: url('/assets/gallery/gallery-portrait-street.webp') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Original side overlay: subtle dark tint with watermark marker, NEVER solid black */
+.video-screen > div[class*="bg-inverse"] {
+  background-color: rgba(10, 15, 30, 0.35) !important;
+  background: rgba(10, 15, 30, 0.35) !important;
+  border: none !important;
+  backdrop-filter: none !important;
+}
+
+.video-screen .video-marker {
+  border: 2px dashed #f43f5e !important;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.7) !important;
+  animation: pulse 2s infinite !important;
+}
+
+.video-divider {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.8) !important;
+}
+
+/* ========================================================
+   VEO PHONE COMPARISON SLIDER FIX (ORIGINAL DESIGN RESTORED)
+   ======================================================== */
+.video-phone {
+  background-color: #0c0b12 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 26px !important;
+  box-shadow: 0 30px 60px -28px rgba(0, 0, 0, 0.9) !important;
+}
+
+.video-screen {
+  background-image: radial-gradient(120px 100px at 32% 26%, rgba(255, 255, 255, 0.35), transparent 70%),
+                    radial-gradient(140px 130px at 76% 82%, rgba(255, 255, 255, 0.15), transparent 70%),
+                    linear-gradient(155deg, #3b1d82 0%, #5b21b6 45%, #1e1b4b 100%) !important;
+  border-radius: 20px !important;
+  position: relative !important;
+}
+
+/* Ensure the Original side (clipPath overlay) is seamless with Cleaned side, NOT solid black! */
+.video-screen > div[class*="bg-inverse"],
+.video-screen > div.bg-inverse\/10 {
+  background-color: transparent !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.video-marker {
+  border: 1.5px dashed #f43f5e !important;
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.6) !important;
+}
+
+.video-divider {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
+}

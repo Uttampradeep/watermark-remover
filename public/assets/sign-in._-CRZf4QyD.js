@@ -1,0 +1,1 @@
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{t}from"./jsx-runtime-DREnUpxT.js";import{t as n}from"./uiComponents-Cx8CxvDW.js";import{n as r,r as i}from"./index-CMACy7-O.js";var a=e(t());function o(){return(0,a.jsx)(r,{title:`Welcome back`,children:(0,a.jsx)(n,{appearance:i})})}export{o as component};
