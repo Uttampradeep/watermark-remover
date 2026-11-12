@@ -389,6 +389,13 @@ app.post(
   "/api/unwatermark/image",
   upload.single("file"),
   async (req, res) => {
+    const auth = getAuth(req);
+    if (!auth.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required. Please sign in to remove watermarks.",
+      });
+    }
     try {
       if (!req.file) {
         return res
@@ -476,6 +483,13 @@ app.post(
   "/api/unwatermark/video",
   upload.single("file"),
   async (req, res) => {
+    const auth = getAuth(req);
+    if (!auth.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required. Please sign in to remove watermarks.",
+      });
+    }
     try {
       if (!req.file) {
         return res
