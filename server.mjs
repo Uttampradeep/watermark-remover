@@ -147,6 +147,7 @@ const FFPROBE_PATH =
     : "ffprobe");
 
 const app = express();
+app.set("trust proxy", true);
 const server = createServer(app);
 
 // Enable Clerk authentication middleware
@@ -673,7 +674,9 @@ app.get("/assets/:file", (req, res, next) => {
   if (!file.endsWith(".js")) return next();
   const filePath = path.join(publicDir, "assets", file);
   if (!fs.existsSync(filePath)) return next();
-  const hostUrl = `${req.protocol}://${req.get("host")}`;
+  const proto = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || (req.secure ? "https" : req.protocol);
+  const host = req.get("x-forwarded-host") || req.get("host");
+  const hostUrl = `${proto}://${host}`;
   const code = sanitizeAndRebrandText(fs.readFileSync(filePath, "utf8"), hostUrl);
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.send(code);
@@ -683,7 +686,9 @@ app.get("/assets/:file", (req, res, next) => {
 app.use(express.static(publicDir, { index: false }));
 
 function sendRebrandedHtml(req, res) {
-  const hostUrl = `${req.protocol}://${req.get("host")}`;
+  const proto = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || (req.secure ? "https" : req.protocol);
+  const host = req.get("x-forwarded-host") || req.get("host");
+  const hostUrl = `${proto}://${host}`;
   let html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
   html = sanitizeAndRebrandText(html, hostUrl);
   html = html.replace(
