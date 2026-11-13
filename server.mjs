@@ -13,10 +13,17 @@ import { fileURLToPath } from "node:url";
 import { clerkMiddleware, getAuth } from "@clerk/express";
 
 // Load the exact reverse-alpha engine used by the original application
+import { removeWatermarkFromBuffer as originalEngineRemove } from "@pilio/gemini-watermark-remover/node";
+import { removeWatermark } from "./node_modules/@pilio/gemini-watermark-remover/src/core/blendModes.js";
+import { getEmbeddedAlphaMap } from "./node_modules/@pilio/gemini-watermark-remover/src/core/embeddedAlphaMaps.js";
 import {
-  removeWatermarkFromBuffer as originalEngineRemove,
-  removeVideoWatermarkFromFile as originalVideoEngineRemove,
-} from "@pilio/gemini-watermark-remover/node";
+  detectWatermarkConfig,
+  calculateWatermarkPosition,
+} from "./node_modules/@pilio/gemini-watermark-remover/src/core/watermarkConfig.js";
+import {
+  interpolateAlphaMap,
+  detectAdaptiveWatermarkRegion,
+} from "./node_modules/@pilio/gemini-watermark-remover/src/core/adaptiveDetector.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -479,6 +486,187 @@ app.get("/api/stats", (req, res) => {
   });
 });
 
+// High-Speed Direct Stream Video Watermark Removal Pipeline
+async function cleanVideoPipeline(inPath, outPath, onProgress) {
+  const probe = await new Promise((resolve, reject) => {
+    const p = spawn(FFPROBE_PATH, [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height,r_frame_rate,nb_frames,duration",
+      "-of", "json",
+      inPath,
+    ]);
+    let d = "";
+    p.stdout.on("data", (c) => (d += c));
+    p.on("close", (code) => {
+      if (code !== 0) return reject(new Error("ffprobe failed to read video metadata"));
+      try {
+        const info = JSON.parse(d).streams[0];
+        const [num, den] = (info.r_frame_rate || "30/1").split("/").map(Number);
+        const fps = den ? num / den : 30;
+        const nbFrames =
+          parseInt(info.nb_frames) ||
+          Math.round((parseFloat(info.duration) || 1) * fps);
+        resolve({
+          width: info.width,
+          height: info.height,
+          fps,
+          duration: parseFloat(info.duration) || 1,
+          nbFrames: Math.max(1, nbFrames),
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+    p.on("error", reject);
+  });
+
+  const { width, height, fps, nbFrames, duration } = probe;
+  const frameBytes = width * height * 4;
+
+  // Extract a sample frame at ~15% video time to skip black fade-ins
+  const probeTime = Math.min(1.0, Math.max(0.1, duration * 0.15)).toFixed(2);
+  const sampleBuf = await new Promise((resolve) => {
+    const dec = spawn(FFMPEG_PATH, [
+      "-v", "error",
+      "-ss", probeTime,
+      "-i", inPath,
+      "-vframes", "1",
+      "-f", "rawvideo",
+      "-pix_fmt", "rgba",
+      "pipe:1",
+    ]);
+    const chunks = [];
+    dec.stdout.on("data", (c) => chunks.push(c));
+    dec.on("close", () => resolve(Buffer.concat(chunks)));
+    dec.on("error", () => resolve(Buffer.alloc(0)));
+  });
+
+  const alpha96 = getEmbeddedAlphaMap(96);
+  const cfg = detectWatermarkConfig(width, height);
+  let targetRegion = null;
+  let targetAlpha = null;
+
+  if (sampleBuf.length === frameBytes) {
+    try {
+      const detected = detectAdaptiveWatermarkRegion({
+        imageData: { width, height, data: sampleBuf },
+        alpha96,
+        defaultConfig: cfg,
+        threshold: 0.15,
+      });
+      if (detected && detected.found && detected.region) {
+        targetRegion = {
+          x: detected.region.x,
+          y: detected.region.y,
+          width: detected.region.size,
+          height: detected.region.size,
+        };
+        targetAlpha = interpolateAlphaMap(alpha96, 96, targetRegion.width);
+      }
+    } catch (e) {
+      console.warn("Adaptive detection error:", e.message);
+    }
+  }
+
+  if (!targetRegion) {
+    const pos = calculateWatermarkPosition(width, height, cfg);
+    targetRegion = pos;
+    targetAlpha =
+      getEmbeddedAlphaMap(cfg.logoSize) ||
+      interpolateAlphaMap(alpha96, 96, cfg.logoSize);
+  }
+
+  console.log(
+    "[Video Engine] Fast-stream processing " + width + "x" + height + " @ " + fps.toFixed(1) + "fps (" + nbFrames + " frames) - Watermark at (" + targetRegion.x + ", " + targetRegion.y + ", " + targetRegion.width + "x" + targetRegion.height + ")",
+  );
+
+  let processedFrames = 0;
+  let lastReport = 0;
+
+  await new Promise((resolve, reject) => {
+    const decoder = spawn(FFMPEG_PATH, [
+      "-v", "error",
+      "-i", inPath,
+      "-f", "rawvideo",
+      "-pix_fmt", "rgba",
+      "pipe:1",
+    ]);
+
+    const encoder = spawn(FFMPEG_PATH, [
+      "-y",
+      "-v", "error",
+      "-f", "rawvideo",
+      "-pix_fmt", "rgba",
+      "-s", width + "x" + height,
+      "-r", fps.toString(),
+      "-i", "pipe:0",
+      "-i", inPath,
+      "-map", "0:v",
+      "-map", "1:a?",
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "18",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "copy",
+      outPath,
+    ]);
+
+    let incoming = Buffer.alloc(0);
+
+    decoder.stdout.on("data", (chunk) => {
+      incoming = Buffer.concat([incoming, chunk]);
+
+      while (incoming.length >= frameBytes) {
+        const frameBuf = incoming.subarray(0, frameBytes);
+        incoming = incoming.subarray(frameBytes);
+
+        // Mathematical reverse-alpha blending
+        removeWatermark(
+          { width, height, data: frameBuf },
+          targetAlpha,
+          targetRegion,
+        );
+
+        processedFrames++;
+        const pct = Math.min(
+          98,
+          Math.max(5, Math.round((processedFrames / nbFrames) * 95)),
+        );
+        if (pct >= lastReport + 2 || processedFrames === nbFrames) {
+          lastReport = pct;
+          if (onProgress) onProgress(pct);
+        }
+
+        const canWrite = encoder.stdin.write(frameBuf);
+        if (!canWrite) {
+          decoder.stdout.pause();
+          encoder.stdin.once("drain", () => {
+            decoder.stdout.resume();
+          });
+        }
+      }
+    });
+
+    decoder.on("close", (code) => {
+      if (code !== 0) console.warn("Decoder exited with code", code);
+      encoder.stdin.end();
+    });
+
+    encoder.on("close", (code) => {
+      if (code === 0 && fs.existsSync(outPath) && fs.statSync(outPath).size > 100) {
+        if (onProgress) onProgress(100);
+        resolve();
+      } else {
+        reject(new Error("Encoder failed with exit code " + code));
+      }
+    });
+
+    decoder.on("error", reject);
+    encoder.on("error", reject);
+  });
+}
+
 app.post(
   "/api/unwatermark/video",
   upload.single("file"),
@@ -514,105 +702,24 @@ app.post(
       // Execute true frame-by-frame reverse-alpha video cleaning pipeline
       (async () => {
         try {
-          await originalVideoEngineRemove(inPath, {
-            outputPath: outPath,
-            allowLowConfidence: true,
-            onProgress: (p) => {
-              const currentProgress = Math.min(
-                98,
-                Math.max(10, Math.round((p.progress || 0.1) * 100)),
-              );
-              saveVideoJob(jobId, {
-                id: jobId,
-                status: "processing",
-                progress: currentProgress,
-                outPath,
-              });
-              notifyVideoJobSubscribers(jobId);
-            },
-          });
-
-          if (fs.existsSync(outPath) && fs.statSync(outPath).size > 1000) {
+          await cleanVideoPipeline(inPath, outPath, (progress) => {
             saveVideoJob(jobId, {
               id: jobId,
-              status: "completed",
-              progress: 100,
+              status: progress >= 100 ? "completed" : "processing",
+              progress,
               outPath,
             });
-          } else {
-            throw new Error("Video output file was not produced");
-          }
-        } catch (err) {
-          console.warn("High-precision video engine fallback to ffmpeg delogo:", err.message);
-          // Fallback to ffmpeg delogo if needed
-          let vw = 640,
-            vh = 360;
-          await new Promise((resolve) => {
-            const fp = spawn(FFPROBE_PATH, [
-              "-v",
-              "error",
-              "-select_streams",
-              "v:0",
-              "-show_entries",
-              "stream=width,height",
-              "-of",
-              "csv=s=x:p=0",
-              inPath,
-            ]);
-            let out = "";
-            fp.stdout.on("data", (d) => (out += d.toString()));
-            fp.on("close", () => {
-              const [pw, ph] = out.trim().split("x").map(Number);
-              if (pw > 0 && ph > 0) {
-                vw = pw;
-                vh = ph;
-              }
-              resolve();
-            });
-            fp.on("error", () => resolve());
-          });
-
-          const dw = Math.max(24, Math.min(180, Math.round(vw * 0.12)));
-          const dh = Math.max(24, Math.min(180, Math.round(vh * 0.12)));
-          const dx = Math.max(1, vw - dw - Math.max(4, Math.round(vw * 0.015)));
-          const dy = Math.max(1, vh - dh - Math.max(4, Math.round(vh * 0.015)));
-
-          const ff = spawn(FFMPEG_PATH, [
-            "-y",
-            "-i",
-            inPath,
-            "-vf",
-            `delogo=x=${dx}:y=${dy}:w=${dw}:h=${dh}`,
-            "-c:a",
-            "copy",
-            outPath,
-          ]);
-
-          let ffErr = "";
-          ff.stderr.on("data", (d) => {
-            ffErr += d.toString();
-          });
-
-          ff.on("close", (code) => {
-            if (code === 0 && fs.existsSync(outPath)) {
-              saveVideoJob(jobId, {
-                id: jobId,
-                status: "completed",
-                progress: 100,
-                outPath,
-              });
-            } else {
-              saveVideoJob(jobId, {
-                id: jobId,
-                status: "failed",
-                error: `Video processing failed: ${err.message}`,
-              });
-            }
             notifyVideoJobSubscribers(jobId);
           });
-          return;
+        } catch (err) {
+          console.error("[Video Clean] Pipeline error:", err);
+          saveVideoJob(jobId, {
+            id: jobId,
+            status: "failed",
+            error: "Video processing failed: " + err.message,
+          });
+          notifyVideoJobSubscribers(jobId);
         }
-        notifyVideoJobSubscribers(jobId);
       })();
 
       res.json({ jobId });
