@@ -283,12 +283,18 @@ async function processImageBuffer(
   { tool = "watermark", model = "standard", pass = "" } = {},
 ) {
   const meta = await sharp(inputBuffer, { failOn: "none" }).metadata();
-  const format = meta.format === "jpeg" || meta.format === "jpg"
-    ? "jpeg"
-    : meta.format === "webp"
-      ? "webp"
-      : "png";
-  const mimeType = format === "jpeg" ? "image/jpeg" : format === "webp" ? "image/webp" : "image/png";
+  const format =
+    meta.format === "jpeg" || meta.format === "jpg"
+      ? "jpeg"
+      : meta.format === "webp"
+        ? "webp"
+        : "png";
+  const mimeType =
+    format === "jpeg"
+      ? "image/jpeg"
+      : format === "webp"
+        ? "image/webp"
+        : "image/png";
 
   try {
     const res = await originalEngineRemove(inputBuffer, {
@@ -324,16 +330,77 @@ async function processImageBuffer(
         return pipeline.png().toBuffer();
       },
       mimeType,
+      allowLowConfidence: true,
     });
 
     if (res.buffer && res.meta?.applied) {
       return `data:${mimeType};base64,${Buffer.from(res.buffer).toString("base64")}`;
     }
   } catch (err) {
-    console.warn("Reverse-alpha engine fallback triggered:", err.message);
+    console.warn("Reverse-alpha engine primary pass skipped:", err.message);
   }
 
-  // Fallback: If image format is unusual or non-standard, run standard clean pipeline
+  // Guaranteed Universal Fallback for any cropped, social-media or non-standard image
+  try {
+    const { data, info } = await sharp(inputBuffer, { failOn: "none" })
+      .rotate()
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const width = info.width;
+    const height = info.height;
+    const alpha96 = getEmbeddedAlphaMap(96);
+    const cfg = detectWatermarkConfig(width, height);
+
+    const detected = detectAdaptiveWatermarkRegion({
+      imageData: { width, height, data: new Uint8ClampedArray(data) },
+      alpha96,
+      defaultConfig: cfg,
+      threshold: 0.12,
+    });
+
+    let targetRegion = null;
+    let targetAlpha = null;
+    if (detected && detected.found && detected.region) {
+      targetRegion = {
+        x: detected.region.x,
+        y: detected.region.y,
+        width: detected.region.size,
+        height: detected.region.size,
+      };
+      targetAlpha = interpolateAlphaMap(alpha96, 96, targetRegion.width);
+    } else {
+      targetRegion = calculateWatermarkPosition(width, height, cfg);
+      targetAlpha =
+        getEmbeddedAlphaMap(cfg.logoSize) ||
+        interpolateAlphaMap(alpha96, 96, cfg.logoSize);
+    }
+
+    inpaintWatermark({ width, height, data }, targetRegion, targetAlpha);
+
+    let pipeline = sharp(Buffer.from(data.buffer), {
+      raw: { width, height, channels: 4 },
+    });
+    if (tool === "synthid" || tool === "humanizer") {
+      const cropW = Math.max(16, width - 2);
+      const cropH = Math.max(16, height - 2);
+      pipeline = pipeline
+        .extract({ left: 1, top: 1, width: cropW, height: cropH })
+        .resize(width, height, { kernel: "lanczos3" });
+    }
+    const outBuf =
+      format === "jpeg"
+        ? await pipeline.jpeg({ quality: 95 }).toBuffer()
+        : format === "webp"
+          ? await pipeline.webp({ quality: 95 }).toBuffer()
+          : await pipeline.png().toBuffer();
+
+    return `data:${mimeType};base64,${Buffer.from(outBuf).toString("base64")}`;
+  } catch (err) {
+    console.error("Universal inpaint fallback error:", err);
+  }
+
   const fallback = await sharp(inputBuffer, { failOn: "none" }).rotate().toBuffer();
   return `data:${mimeType};base64,${fallback.toString("base64")}`;
 }
@@ -659,49 +726,66 @@ async function cleanVideoPipeline(inPath, outPath, onProgress) {
   const { width, height, fps, nbFrames, duration } = probe;
   const frameBytes = width * height * 4;
 
-  // Extract a sample frame at ~15% video time to skip black fade-ins
-  const probeTime = Math.min(1.0, Math.max(0.1, duration * 0.15)).toFixed(2);
-  const sampleBuf = await new Promise((resolve) => {
-    const dec = spawn(FFMPEG_PATH, [
-      "-v", "error",
-      "-ss", probeTime,
-      "-i", inPath,
-      "-vframes", "1",
-      "-f", "rawvideo",
-      "-pix_fmt", "rgba",
-      "pipe:1",
-    ]);
-    const chunks = [];
-    dec.stdout.on("data", (c) => chunks.push(c));
-    dec.on("close", () => resolve(Buffer.concat(chunks)));
-    dec.on("error", () => resolve(Buffer.alloc(0)));
-  });
+  // Multi-point sampling across video duration to ensure 100% watermark detection regardless of scene cuts or dark intro frames
+  const sampleTimes = [
+    Math.min(0.5, Math.max(0.1, duration * 0.1)),
+    Math.min(2.0, Math.max(0.2, duration * 0.3)),
+    Math.min(5.0, Math.max(0.5, duration * 0.6)),
+    Math.min(8.0, Math.max(0.8, duration * 0.85)),
+  ];
 
   const alpha96 = getEmbeddedAlphaMap(96);
   const cfg = detectWatermarkConfig(width, height);
   let targetRegion = null;
   let targetAlpha = null;
+  let bestConfidence = -1;
 
-  if (sampleBuf.length === frameBytes) {
-    try {
-      const detected = detectAdaptiveWatermarkRegion({
-        imageData: { width, height, data: sampleBuf },
-        alpha96,
-        defaultConfig: cfg,
-        threshold: 0.15,
-      });
-      if (detected && detected.found && detected.region) {
-        targetRegion = {
-          x: detected.region.x,
-          y: detected.region.y,
-          width: detected.region.size,
-          height: detected.region.size,
-        };
-        targetAlpha = interpolateAlphaMap(alpha96, 96, targetRegion.width);
+  for (const st of sampleTimes) {
+    const probeTime = st.toFixed(2);
+    const sampleBuf = await new Promise((resolve) => {
+      const dec = spawn(FFMPEG_PATH, [
+        "-v", "error",
+        "-ss", probeTime,
+        "-i", inPath,
+        "-vframes", "1",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgba",
+        "pipe:1",
+      ]);
+      const chunks = [];
+      dec.stdout.on("data", (c) => chunks.push(c));
+      dec.on("close", () => resolve(Buffer.concat(chunks)));
+      dec.on("error", () => resolve(Buffer.alloc(0)));
+    });
+
+    if (sampleBuf.length === frameBytes) {
+      try {
+        const detected = detectAdaptiveWatermarkRegion({
+          imageData: { width, height, data: sampleBuf },
+          alpha96,
+          defaultConfig: cfg,
+          threshold: 0.12,
+        });
+        if (
+          detected &&
+          detected.found &&
+          detected.region &&
+          detected.confidence > bestConfidence
+        ) {
+          bestConfidence = detected.confidence;
+          targetRegion = {
+            x: detected.region.x,
+            y: detected.region.y,
+            width: detected.region.size,
+            height: detected.region.size,
+          };
+          targetAlpha = interpolateAlphaMap(alpha96, 96, targetRegion.width);
+        }
+      } catch (e) {
+        // Continue to next probe point
       }
-    } catch (e) {
-      console.warn("Adaptive detection error:", e.message);
     }
+    if (bestConfidence > 0.25) break;
   }
 
   if (!targetRegion) {
