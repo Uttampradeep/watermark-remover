@@ -486,6 +486,141 @@ app.get("/api/stats", (req, res) => {
   });
 });
 
+// Seamless Laplacian Inpainting on Watermark Footprint
+function inpaintWatermark(imageData, position, alphaMap) {
+  const { width, height, data } = imageData;
+  const { x, y, width: pw, height: ph } = position;
+
+  const pad = 6;
+  const roiX = Math.max(0, x - pad);
+  const roiY = Math.max(0, y - pad);
+  const roiW = Math.min(width, x + pw + pad) - roiX;
+  const roiH = Math.min(height, y + ph + pad) - roiY;
+
+  const mask = new Uint8Array(roiW * roiH);
+  for (let r = 0; r < ph; r++) {
+    const imgY = y + r;
+    if (imgY < roiY || imgY >= roiY + roiH) continue;
+    const rowOffset = (imgY - roiY) * roiW;
+    const alphaRow = r * pw;
+    for (let c = 0; c < pw; c++) {
+      const imgX = x + c;
+      if (imgX < roiX || imgX >= roiX + roiW) continue;
+      if (Math.abs(alphaMap[alphaRow + c]) > 0.02) {
+        mask[rowOffset + (imgX - roiX)] = 1;
+      }
+    }
+  }
+
+  const roiData = new Float32Array(roiW * roiH * 4);
+  for (let r = 0; r < roiH; r++) {
+    const srcRow = (roiY + r) * width * 4;
+    const dstRow = r * roiW * 4;
+    for (let c = 0; c < roiW; c++) {
+      const srcIdx = srcRow + (roiX + c) * 4;
+      const dstIdx = dstRow + c * 4;
+      roiData[dstIdx] = data[srcIdx];
+      roiData[dstIdx + 1] = data[srcIdx + 1];
+      roiData[dstIdx + 2] = data[srcIdx + 2];
+      roiData[dstIdx + 3] = data[srcIdx + 3];
+    }
+  }
+
+  const working = new Float32Array(roiData);
+  const temp = new Float32Array(roiData);
+
+  // Initial seed from surrounding boundary pixels
+  for (let r = 0; r < roiH; r++) {
+    const rowOffset = r * roiW;
+    for (let c = 0; c < roiW; c++) {
+      const pIdx = rowOffset + c;
+      if (!mask[pIdx]) continue;
+
+      let count = 0;
+      let rgb0 = 0, rgb1 = 0, rgb2 = 0;
+      for (let ring = 1; ring <= 8 && count === 0; ring++) {
+        for (let dr = -ring; dr <= ring; dr++) {
+          const nr = r + dr;
+          if (nr < 0 || nr >= roiH) continue;
+          const nRow = nr * roiW;
+          for (let dc = -ring; dc <= ring; dc++) {
+            const nc = c + dc;
+            if (nc < 0 || nc >= roiW || Math.max(Math.abs(dr), Math.abs(dc)) !== ring) continue;
+            const neighborIdx = nRow + nc;
+            if (mask[neighborIdx]) continue;
+            const nSrc = neighborIdx * 4;
+            rgb0 += roiData[nSrc];
+            rgb1 += roiData[nSrc + 1];
+            rgb2 += roiData[nSrc + 2];
+            count++;
+          }
+        }
+      }
+      if (count > 0) {
+        const dst = pIdx * 4;
+        const inv = 1 / count;
+        working[dst] = rgb0 * inv;
+        working[dst + 1] = rgb1 * inv;
+        working[dst + 2] = rgb2 * inv;
+        temp[dst] = working[dst];
+        temp[dst + 1] = working[dst + 1];
+        temp[dst + 2] = working[dst + 2];
+      }
+    }
+  }
+
+  // Iterative Laplacian boundary diffusion
+  const iterations = 16;
+  const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let r = 0; r < roiH; r++) {
+      const rowOffset = r * roiW;
+      for (let c = 0; c < roiW; c++) {
+        const pIdx = rowOffset + c;
+        const dst = pIdx * 4;
+        if (!mask[pIdx]) {
+          temp[dst] = working[dst];
+          temp[dst + 1] = working[dst + 1];
+          temp[dst + 2] = working[dst + 2];
+          continue;
+        }
+
+        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+        for (const [dr, dc] of neighbors) {
+          const nr = r + dr;
+          const nc = c + dc;
+          if (nr < 0 || nr >= roiH || nc < 0 || nc >= roiW) continue;
+          const nDst = (nr * roiW + nc) * 4;
+          sumR += working[nDst];
+          sumG += working[nDst + 1];
+          sumB += working[nDst + 2];
+          count++;
+        }
+        if (count > 0) {
+          const inv = 1 / count;
+          temp[dst] = sumR * inv;
+          temp[dst + 1] = sumG * inv;
+          temp[dst + 2] = sumB * inv;
+        }
+      }
+    }
+    working.set(temp);
+  }
+
+  for (let r = 0; r < roiH; r++) {
+    const dstRow = (roiY + r) * width * 4;
+    const srcRow = r * roiW * 4;
+    for (let c = 0; c < roiW; c++) {
+      if (!mask[r * roiW + c]) continue;
+      const srcIdx = srcRow + c * 4;
+      const dstIdx = dstRow + (roiX + c) * 4;
+      data[dstIdx] = (working[srcIdx] + 0.5) | 0;
+      data[dstIdx + 1] = (working[srcIdx + 1] + 0.5) | 0;
+      data[dstIdx + 2] = (working[srcIdx + 2] + 0.5) | 0;
+    }
+  }
+}
+
 // High-Speed Direct Stream Video Watermark Removal Pipeline
 async function cleanVideoPipeline(inPath, outPath, onProgress) {
   const probe = await new Promise((resolve, reject) => {
@@ -621,11 +756,11 @@ async function cleanVideoPipeline(inPath, outPath, onProgress) {
         const frameBuf = incoming.subarray(0, frameBytes);
         incoming = incoming.subarray(frameBytes);
 
-        // Mathematical reverse-alpha blending
-        removeWatermark(
+        // Seamless Laplacian inpainting on exact watermark footprint
+        inpaintWatermark(
           { width, height, data: frameBuf },
-          targetAlpha,
           targetRegion,
+          targetAlpha,
         );
 
         processedFrames++;
